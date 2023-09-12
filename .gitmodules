@@ -1,0 +1,6 @@
+[submodule "assignment1_colab"]
+	path = assignment1_colab
+	url = https://github.com/odedbasaraba/assignment1_colab
+[submodule "assignment2"]
+	path = assignment2
+	url = https://github.com/odedbasaraba/assignment2
