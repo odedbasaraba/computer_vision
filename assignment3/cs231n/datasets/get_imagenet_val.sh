@@ -1,1 +1,1 @@
-wget http://cs231n.stanford.edu/imagenet_val_25.npz
+wget C:\Users\Basaraba\Desktop\computer_vision\assignment3\cs231n\datasets

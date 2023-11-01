@@ -34,8 +34,16 @@ def compute_saliency_maps(X, y, model):
     ##############################################################################
     # *****START OF YOUR CODE (DO NOT DELETE/MODIFY THIS LINE)*****
 
-    pass
+    # get the losses
+    pred_scores = model(X)
+    loss_fn = torch.nn.CrossEntropyLoss()
+    loss = loss_fn(pred_scores, y).sum()
 
+    # after loss perform backward
+    loss.backward()
+
+    # Compute the saliency maps by taking the absolute value of the gradients
+    saliency, _ = torch.max(torch.abs(X.grad), dim=1)
     # *****END OF YOUR CODE (DO NOT DELETE/MODIFY THIS LINE)*****
     ##############################################################################
     #                             END OF YOUR CODE                               #
@@ -76,7 +84,23 @@ def make_fooling_image(X, target_y, model):
     ##############################################################################
     # *****START OF YOUR CODE (DO NOT DELETE/MODIFY THIS LINE)*****
 
-    pass
+    #we run the model until 
+    i = 0
+    while True:
+        i += 1
+        pred_y = model(X_fooling)
+        pred_class = pred_y.argmax(dim=1, keepdim=True)
+
+        if i % 10 == 0:
+            print("iteration number ", i)
+        if pred_class.item() == target_y:
+            break
+    
+        loss = pred_y[0, target_y]
+        loss.backward()
+
+        X_fooling.data += learning_rate * X_fooling.grad / torch.norm(X_fooling.grad)
+        X_fooling.grad.zero_()
 
     # *****END OF YOUR CODE (DO NOT DELETE/MODIFY THIS LINE)*****
     ##############################################################################
@@ -94,7 +118,13 @@ def class_visualization_update_step(img, model, target_y, l2_reg, learning_rate)
     ########################################################################
     # *****START OF YOUR CODE (DO NOT DELETE/MODIFY THIS LINE)*****
 
-    pass
+    scores = model(img)
+    image_loss = scores[0, target_y]
+    loss = image_loss - l2_reg * img.square().sum()
+    loss.backward()
+
+    img.data += learning_rate *img.grad / torch.norm(img.grad)
+    img.grad.zero_()
 
     # *****END OF YOUR CODE (DO NOT DELETE/MODIFY THIS LINE)*****
     ########################################################################
