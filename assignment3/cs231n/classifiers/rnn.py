@@ -148,8 +148,32 @@ class CaptioningRNN:
         ############################################################################
         # *****START OF YOUR CODE (DO NOT DELETE/MODIFY THIS LINE)*****
 
-        pass
+        #forward
+        affine_out, affine_cache = affine_forward(features, W_proj, b_proj)
+        embedding_out, embedding_cache = word_embedding_forward(captions_in, W_embed)
+        if self.cell_type == "rnn":
+            farward_out, farward_cache = rnn_forward(embedding_out, affine_out , Wx, Wh, b)
+        out, cache_out = temporal_affine_forward(farward_out, W_vocab, b_vocab)
 
+        loss, dout = temporal_softmax_loss(out, captions_out, mask)
+
+        #backward
+
+        dout, dW_vocab, db_vocab = temporal_affine_backward(dout, cache_out)
+        demb_out , daff_out, dWx, dWh, db = rnn_backward(dout,farward_cache)
+        dW_embed = word_embedding_backward(demb_out,embedding_cache)
+        _ ,dW_proj, db_proj = affine_backward(daff_out, affine_cache)
+
+        grads = {
+            "W_proj": dW_proj,
+            "b_proj": db_proj,
+            "W_embed": dW_embed,
+            "Wx": dWx,
+            "Wh": dWh,
+            "b": db,
+            "W_vocab": dW_vocab,
+            "b_vocab": db_vocab
+        }
         # *****END OF YOUR CODE (DO NOT DELETE/MODIFY THIS LINE)*****
         ############################################################################
         #                             END OF YOUR CODE                             #
@@ -215,8 +239,18 @@ class CaptioningRNN:
         # you are using an LSTM, initialize the first cell state to zeros.        #
         ###########################################################################
         # *****START OF YOUR CODE (DO NOT DELETE/MODIFY THIS LINE)*****
+        h, _ = affine_forward(features, W_proj, b_proj)
+        x = [self._start] * N
 
-        pass
+        for i in range(max_length):
+            x, _ = word_embedding_forward(x, W_embed)
+
+            h, _ = rnn_step_forward(x, h, Wx, Wh, b)
+
+            out, _ = affine_forward(h, W_vocab, b_vocab)
+
+            x = np.argmax(out, axis = 1)
+            captions[:,i] = x
 
         # *****END OF YOUR CODE (DO NOT DELETE/MODIFY THIS LINE)*****
         ############################################################################

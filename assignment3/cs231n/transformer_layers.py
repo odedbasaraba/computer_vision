@@ -37,8 +37,11 @@ class PositionalEncoding(nn.Module):
         # less than 5 lines of code.                                               #
         ############################################################################
         # *****START OF YOUR CODE (DO NOT DELETE/MODIFY THIS LINE)*****
-
-        pass
+        i = torch.arange(max_len)[:,None]
+        power = torch.pow(10000,-torch.arange(0, embed_dim,2)/embed_dim)
+        
+        pe[:,:,0::2] = torch.sin(i * power)
+        pe[:,:,1::2] = torch.cos(i * power)
 
         # *****END OF YOUR CODE (DO NOT DELETE/MODIFY THIS LINE)*****
         ############################################################################
@@ -69,8 +72,8 @@ class PositionalEncoding(nn.Module):
         # afterward. This should only take a few lines of code.                    #
         ############################################################################
         # *****START OF YOUR CODE (DO NOT DELETE/MODIFY THIS LINE)*****
-
-        pass
+        output = x+ self.pe[:, :S, :]
+        output = self.dropout(output)
 
         # *****END OF YOUR CODE (DO NOT DELETE/MODIFY THIS LINE)*****
         ############################################################################
@@ -125,52 +128,74 @@ class MultiHeadAttention(nn.Module):
         self.head_dim = self.emd_dim // self.n_head
 
     def forward(self, query, key, value, attn_mask=None):
-        """
-        Calculate the masked attention output for the provided data, computing
-        all attention heads in parallel.
+      """
+      Calculate the masked attention output for the provided data, computing
+      all attention heads in parallel.
 
-        In the shape definitions below, N is the batch size, S is the source
-        sequence length, T is the target sequence length, and E is the embedding
-        dimension.
+      In the shape definitions below, N is the batch size, S is the source
+      sequence length, T is the target sequence length, and E is the embedding
+      dimension.
 
-        Inputs:
-        - query: Input data to be used as the query, of shape (N, S, E)
-        - key: Input data to be used as the key, of shape (N, T, E)
-        - value: Input data to be used as the value, of shape (N, T, E)
-        - attn_mask: Array of shape (S, T) where mask[i,j] == 0 indicates token
-          i in the source should not influence token j in the target.
+      Inputs:
+      - query: Input data to be used as the query, of shape (N, S, E)
+      - key: Input data to be used as the key, of shape (N, T, E)
+      - value: Input data to be used as the value, of shape (N, T, E)
+      - attn_mask: Array of shape (S, T) where mask[i,j] == 0 indicates token
+        i in the source should not influence token j in the target.
 
-        Returns:
-        - output: Tensor of shape (N, S, E) giving the weighted combination of
-          data in value according to the attention weights calculated using key
-          and query.
-        """
-        N, S, E = query.shape
-        N, T, E = value.shape
-        # Create a placeholder, to be overwritten by your code below.
-        output = torch.empty((N, S, E))
-        ############################################################################
-        # TODO: Implement multiheaded attention using the equations given in       #
-        # Transformer_Captioning.ipynb.                                            #
-        # A few hints:                                                             #
-        #  1) You'll want to split your shape from (N, T, E) into (N, T, H, E/H),  #
-        #     where H is the number of heads.                                      #
-        #  2) The function torch.matmul allows you to do a batched matrix multiply.#
-        #     For example, you can do (N, H, T, E/H) by (N, H, E/H, T) to yield a  #
-        #     shape (N, H, T, T). For more examples, see                           #
-        #     https://pytorch.org/docs/stable/generated/torch.matmul.html          #
-        #  3) For applying attn_mask, think how the scores should be modified to   #
-        #     prevent a value from influencing output. Specifically, the PyTorch   #
-        #     function masked_fill may come in handy.                              #
-        ############################################################################
-        # *****START OF YOUR CODE (DO NOT DELETE/MODIFY THIS LINE)*****
+      Returns:
+      - output: Tensor of shape (N, S, E) giving the weighted combination of
+        data in value according to the attention weights calculated using key
+        and query.
+      """
+      N, S, E = query.shape
+      N, T, E = value.shape
+      # Create a placeholder, to be overwritten by your code below.
+      output = torch.empty((N, S, E))
+      ############################################################################
+      # TODO: Implement multiheaded attention using the equations given in       #
+      # Transformer_Captioning.ipynb.                                            #
+      # A few hints:                                                             #
+      #  1) You'll want to split your shape from (N, T, E) into (N, T, H, E/H),  #
+      #     where H is the number of heads.                                      #
+      #  2) The function torch.matmul allows you to do a batched matrix multiply.#
+      #     For example, you can do (N, H, T, E/H) by (N, H, E/H, T) to yield a  #
+      #     shape (N, H, T, T). For more examples, see                           #
+      #     https://pytorch.org/docs/stable/generated/torch.matmul.html          #
+      #  3) For applying attn_mask, think how the scores should be modified to   #
+      #     prevent a value from influencing output. Specifically, the PyTorch   #
+      #     function masked_fill may come in handy.                              #
+      ############################################################################
+      # *****START OF YOUR CODE (DO NOT DELETE/MODIFY THIS LINE)*****
+      H = self.n_head
+          
+      K = self.key(key)
+      # N, H, T, E//H
+      key_proj = K.view(N, T, H, E // H).moveaxis(1,2)
 
-        pass
+      Q = self.query(query)
+      # N, H, S, E//H
+      query_proj = Q.view(N, S, H, E // H).moveaxis(1,2)
 
-        # *****END OF YOUR CODE (DO NOT DELETE/MODIFY THIS LINE)*****
-        ############################################################################
-        #                             END OF YOUR CODE                             #
-        ############################################################################
-        return output
+      V = self.value(value)
+      # N, H, T, E//H
+      val_proj = V.view(N, T, H, E // H).moveaxis(1,2)
 
+      scaling = math.sqrt(E // H)
 
+      # N, H, S, E//H *  N, H, E//H, T ->  N, H, S, T
+      QK = query_proj @ key_proj.transpose(2,3) / scaling
+      # Apply attention mask
+      if attn_mask is not None:
+          QK = QK.masked_fill(attn_mask == 0, float('-inf'))
+
+      attention_weights = self.attn_drop(F.softmax(QK, dim=-1)) @ val_proj
+
+      # output shape N, H, S, T
+      output = self.proj(attention_weights.moveaxis(1, 2).reshape(N, S, E))
+
+      # *****END OF YOUR CODE (DO NOT DELETE/MODIFY THIS LINE)*****
+      ############################################################################
+      #                             END OF YOUR CODE                             #
+      ############################################################################
+      return output
