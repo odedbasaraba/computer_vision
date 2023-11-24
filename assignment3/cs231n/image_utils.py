@@ -58,9 +58,9 @@ def image_from_url(url):
     """
     try:
         f = urllib.request.urlopen(url)
-        _, fname = tempfile.mkstemp()
-        with open(fname, "wb") as ff:
+        with tempfile.NamedTemporaryFile(delete=False) as ff:
             ff.write(f.read())
+            fname = ff.name
         img = imread(fname)
         os.remove(fname)
         return img
@@ -68,6 +68,7 @@ def image_from_url(url):
         print("URL Error: ", e.reason, url)
     except urllib.error.HTTPError as e:
         print("HTTP Error: ", e.code, url)
+
 
 
 def load_image(filename, size=None):
